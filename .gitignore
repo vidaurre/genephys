@@ -1,0 +1,13 @@
+genephys/__pycache__/*.pyc
+genephys/.DS_Store
+
+.DS_Store
+*.swp
+*.py~
+*~
+*.asv
+
+*.bak
+
+dist/*tar.gz
+dist/*.whl
