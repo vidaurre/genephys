@@ -1,10 +1,11 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy import stats as st
+#from . import sampler
 import sampler, decoders
 
-@staticmethod
-def plot_accuracy(accuracy,colorbar_accuracy_lim=(0.25,0.75)):
+
+def plot_accuracy(accuracy,colorbar_accuracy_lim=(0.25,0.75),filename=None):
     """ Plots the TGM and the diagonal, 
         which represents time point by time point accuracy
     """
@@ -36,12 +37,11 @@ def plot_accuracy(accuracy,colorbar_accuracy_lim=(0.25,0.75)):
         ax.set_xlabel('Time')
         ax.set_ylabel('Accuracy')
 
-    # if title is not None:
-    #     ax.set_title(title)
+    if not filename is None:
+        plt.savefig(filename)
 
 
-@staticmethod
-def plot_betas(betas):
+def plot_betas(betas,filename=None):
     """ Plots betas
     """
     fig,ax = plt.subplots()
@@ -61,15 +61,55 @@ def plot_betas(betas):
 
     fig.tight_layout()
 
+    if not filename is None:
+        plt.savefig(filename)
 
-@staticmethod
-def plot_signal(X,Phase=None,Freq=None,Amplitude=None,Additive_response=None,Stimulus=None,n=0,j=0):
+
+def plot_corrcoefs(X,y,filename=None):
+
+    def get_Y_from_Stimulus(Stimulus):
+        """ Assumes that there is only one ocurrence per trial"""
+
+        T,N = Stimulus.shape
+        Y = np.zeros((N,))
+        for j in range(N):
+            y = np.max(Stimulus[:,j])
+            if y>0: Y[j] = y
+        return Y
+
+    def check_y_format(y):
+        if len(y.shape)==2: 
+            y = get_Y_from_Stimulus(y)
+        y = np.copy(y)
+        y = y * 1 # convert to int if it was Boolean 
+        y = y.astype(float)
+        return y
+
+    (T,N,p) = X.shape
+    y = check_y_format(y)
+
+    C = np.zeros((p,T))
+    for t in range(T):
+        for j in range(p):
+            C[j,t] = np.corrcoef(X[t,:,j],y)[0,1]
+
+    plot_betas(C,filename)
+    
+
+
+
+def plot_signal(X,Phase=None,Freq=None,Amplitude=None,Additive_responses=None,\
+        Stimulus=None,n=0,j=0,filename=None):
     """ Plots the signal, its phase, frequency, amplitude, 
         the additive response, and/or the Stimulus, 
         for trial n and channel j """
 
     n_plots = 1 + (Phase is not None) + (Freq is not None) \
-        + (Amplitude is not None) + (Additive_response is not None) + (Stimulus is not None)
+        + (Amplitude is not None) + (Stimulus is not None)
+    if Additive_responses is not None:
+        if type(Additive_responses) is tuple: n_plots += len(Additive_responses)
+        else: n_plots += 1
+
     T = X.shape[0]
 
     if n_plots == 1:
@@ -107,11 +147,18 @@ def plot_signal(X,Phase=None,Freq=None,Amplitude=None,Additive_response=None,Sti
         if i < n_plots-1: ax[i].tick_params(labelbottom = False, bottom = False)
         i += 1  
 
-    if Additive_response is not None:
-        ax[i].plot(np.linspace(0,T,T),Additive_response[:,n,j],color='r',linewidth=2)
-        ax[i].set_ylabel('additive response')
-        if i < n_plots-1: ax[i].tick_params(labelbottom = False, bottom = False)
-        i += 1          
+    if Additive_responses is not None:
+        if type(Additive_responses) is tuple:
+            for ij in range(len(Additive_responses)):
+                ax[i].plot(np.linspace(0,T,T),Additive_responses[ij][:,n,j],color='r',linewidth=2)
+                ax[i].set_ylabel('additive response ' + str(ij))
+                if i < n_plots-1: ax[i].tick_params(labelbottom = False, bottom = False)
+                i += 1
+        else:
+            ax[i].plot(np.linspace(0,T,T),Additive_responses[:,n,j],color='r',linewidth=2)
+            ax[i].set_ylabel('additive response')
+            if i < n_plots-1: ax[i].tick_params(labelbottom = False, bottom = False)
+            i += 1          
         
     if Stimulus is not None:
         ax[i].plot(np.linspace(0,T,T),Stimulus[:,n],color='k',linewidth=2)
@@ -122,24 +169,37 @@ def plot_signal(X,Phase=None,Freq=None,Amplitude=None,Additive_response=None,Sti
     for axj in ax: axj.label_outer()
     #fig.tight_layout()
 
+    if not filename is None:
+        plt.savefig(filename)
 
-@staticmethod
-def plot_erp(Stimulus,X,Phase=None,Freq=None,Amplitude=None,Additive_response=None,j=0):
+
+def plot_erp(Stimulus,X,Phase=None,Freq=None,Amplitude=None,Additive_responses=None,\
+        j=0,filename=None):
     """ Plots the signal, its phase, frequency, amplitude, 
         and/or additive response, and/or the Stimulus, 
         for channel j """
 
     n_plots = 1 + (Phase is not None) + (Freq is not None) \
-        + (Amplitude is not None) + (Additive_response is not None) 
+        + (Amplitude is not None)  
+    if Additive_responses is not None:
+        if type(Additive_responses) is tuple: n_plots += len(Additive_responses)
+        else: n_plots += 1
+
     [T,N,_] = X.shape
     if Stimulus is not None:
-        Y = np.zeros((N,),dtype=int)
-        for i in range(N):
-            y = np.max(Stimulus[:,i])
-            if round(y) != y:
-                raise Exception("Stimulus has to be categorical")
-            if y>0: Y[i] = int(y)
+        if (len(Stimulus.shape)==2) and (Stimulus.shape[1]==N):
+            Y = np.zeros((N,),dtype=int)
+            for i in range(N):
+                y = np.max(Stimulus[:,i])
+                if round(y) != y:
+                    raise Exception("Stimulus has to be categorical")
+                if y>0: Y[i] = int(y)
+        else: 
+            Y = Stimulus
         Q = np.max(Y)
+        if round(Q) != Q: raise Exception("Stimulus has to be categorical")
+        Q = int(Q)
+
     blue_gradient = np.zeros((Q,3))
     blue_gradient[:,2] = np.linspace(0.5,1,Q)
     red_gradient = np.zeros((Q,3))
@@ -190,22 +250,33 @@ def plot_erp(Stimulus,X,Phase=None,Freq=None,Amplitude=None,Additive_response=No
         if i < n_plots-1: ax[i].tick_params(labelbottom = False, bottom = False)
         i += 1  
 
-    if Additive_response is not None:
-        for k in range(1,Q+1):
-            ax[i].plot(np.linspace(0,T,T),np.mean(Additive_response[:,Y==k,j],axis=1),\
-                color=red_gradient[k-1,:],linewidth=2)
-        ax[i].set_ylabel('additive response')
-        if i < n_plots-1: ax[i].tick_params(labelbottom = False, bottom = False)
-        i += 1          
+    if Additive_responses is not None:
+        if type(Additive_responses) is tuple:
+            for ij in range(len(Additive_responses)):
+                for k in range(1,Q+1):
+                    ax[i].plot(np.linspace(0,T,T),np.mean(Additive_responses[ij][:,Y==k,j],axis=1),\
+                        color=red_gradient[k-1,:],linewidth=2)
+                ax[i].set_ylabel('additive response ' + str(ij))
+                if i < n_plots-1: ax[i].tick_params(labelbottom = False, bottom = False)
+                i += 1 
+        else:
+            for k in range(1,Q+1):
+                ax[i].plot(np.linspace(0,T,T),np.mean(Additive_responses[:,Y==k,j],axis=1),\
+                    color=red_gradient[k-1,:],linewidth=2)
+            ax[i].set_ylabel('additive response')
+            if i < n_plots-1: ax[i].tick_params(labelbottom = False, bottom = False)
+            i += 1          
         
     ax[i-1].set_xlabel('Time')   
     for axj in ax: axj.label_outer()
     #fig.tight_layout()
 
+    if not filename is None:
+        plt.savefig(filename)
 
-@staticmethod
+
 def plot_activation_function(kernel_type=('Exponential','Log'),kernel_par=(25,(10,150,50)),
-        T=400,t=100,delay=0,jitter=0):
+        T=400,t=100,delay=0,jitter=0,filename=None):
     """ Plot the activation function, according to the kernel function.
         T is the length of the trial, and tstim indicates when the stimulus occurs
     """
@@ -218,8 +289,37 @@ def plot_activation_function(kernel_type=('Exponential','Log'),kernel_par=(25,(1
     plt.plot(np.linspace(0,T,T),cstim,color='b',linewidth=2)
     ax.set_xlabel('Time')
     ax.set_ylabel('Activation')
-    
+
+    if not filename is None:
+        plt.savefig(filename)
 
 
 
-    
+def plot_activation_functions(functions,T=400,t=100,delay=0,\
+        jitter=0,overlap=True,filename=None):
+    """ Plot the activation function, according to the kernel function.
+        T is the length of the trial, and tstim indicates when the stimulus occurs
+    """
+
+    stim = np.zeros(T)
+    stim[t] = 1
+    ds = sampler.DataSampler(T)
+    if overlap:
+        cstim = np.zeros((T,len(functions)))
+        for j in range(len(functions)):
+                cstim[:,j],_ = ds.convolve_stimulus(stim,functions[j]["kernel_type"],functions[j]["kernel_par"], \
+                    delay,jitter)
+    else:
+        cstim = np.zeros(T)
+        for j in range(len(functions)):
+            cs,_ = ds.convolve_stimulus(stim,functions[j]["kernel_type"],functions[j]["kernel_par"], \
+                delay,jitter)
+            cstim = np.maximum(cstim,cs)
+    fig,ax = plt.subplots()
+    plt.plot(np.linspace(0,T,T),cstim,color='b',linewidth=2)
+    ax.set_xlabel('Time')
+    ax.set_ylabel('Activation')
+
+    if not filename is None:
+        plt.savefig(filename)
+

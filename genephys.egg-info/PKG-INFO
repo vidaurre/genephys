@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: genephys
-Version: 0.1.1
+Version: 0.1.5
 Summary: Generative model of empirical electrophysiological signals
 Home-page: https://github.com/vidaurre/genephys
 Author: Diego Vidaurre

@@ -56,6 +56,7 @@ class Decoder():
 
         return Y
 
+
     @staticmethod
     def vcorrcoef(X,y):
         X = X - np.reshape(np.mean(X,axis=0),(1,X.shape[1]))
@@ -238,7 +239,7 @@ class Decoder():
         return accuracy,betas
 
 
-    def decode(self, X,y):
+    def decode(self,X,y):
 
         (T,N,p) = X.shape
         y = self.check_y_format(y)

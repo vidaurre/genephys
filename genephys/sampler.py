@@ -51,6 +51,9 @@ class DataSampler():
         if not "additive_oscillation" in evoked_options:
             evoked_options["additive_oscillation"] = False        
 
+        if evoked_options["phase_reset"] and evoked_options["additive_oscillation"]:
+            raise Exception("Phase resetting and additive oscillations are not compatible")
+
         task = (Q is not None) and \
             (evoked_options["phase_reset"] or 
             evoked_options["amplitude_modulation"] or  
@@ -106,6 +109,8 @@ class DataSampler():
                 evoked_options["PH"] = np.transpose(mb.repmat(evoked_options["PH"], nchan, 1))
             elif evoked_options["PH"].shape != (Q,nchan):
                 raise Exception("PH has invalid dimensions")
+            if not "ENTRAINMENT_STRENGTH" in evoked_options:
+                evoked_options["ENTRAINMENT_STRENGTH"] = 1
             if (not "F_ENTRAINMENT" in evoked_options) or (evoked_options["F_ENTRAINMENT"] is None):
                 # sorting out frequencies
                 relevant_channels = evoked_options["CHAN_PROB"] > 0
@@ -159,10 +164,13 @@ class DataSampler():
                     evoked_options["F_ENTRAINMENT"] = np.reshape(evoked_options["F_ENTRAINMENT"],(T,nchan,Q),order='F')
                 else:
                     raise Exception("F_ENTRAINMENT has invalid dimensions")
+            evoked_options["OWN_KERNEL_PH"] =  \
+                ("KERNEL_TYPE_PH" in evoked_options) or ("KERNEL_PAR_PH" in evoked_options)
             if not "KERNEL_TYPE_PH" in evoked_options:
                 evoked_options["KERNEL_TYPE_PH"] = evoked_options["KERNEL_TYPE"]
             if not "KERNEL_PAR_PH" in evoked_options:
                 evoked_options["KERNEL_PAR_PH"] = evoked_options["KERNEL_PAR"]
+                
 
         if evoked_options["amplitude_modulation"]:
             #if not "DIFF_AMP" in evoked_options:
@@ -178,6 +186,8 @@ class DataSampler():
                 evoked_options["AMP"] = np.transpose(mb.repmat(evoked_options["AMP"], nchan, 1))
             elif evoked_options["AMP"].shape != (Q,nchan):
                 raise Exception("AMP has invalid dimensions")
+            evoked_options["OWN_KERNEL_AMP"] = \
+                ("KERNEL_TYPE_AMP" in evoked_options) or ("KERNEL_PAR_AMP" in evoked_options)
             if not "KERNEL_TYPE_AMP" in evoked_options:
                 evoked_options["KERNEL_TYPE_AMP"] = evoked_options["KERNEL_TYPE"]
             if not "KERNEL_PAR_AMP" in evoked_options:
@@ -199,6 +209,9 @@ class DataSampler():
             #   raise Exception("ADDR has invalid dimensions")
             n_additive_responses = evoked_options["ADDR"].shape[2]
             if n_additive_responses == 1:
+                evoked_options["OWN_KERNEL_ADDR_0"] = \
+                    ("KERNEL_TYPE_ADDR" in evoked_options) or ("KERNEL_PAR_ADDR" in evoked_options) or \
+                    ("KERNEL_TYPE_ADDR_0" in evoked_options) or ("KERNEL_PAR_ADDR_0" in evoked_options)
                 if "KERNEL_TYPE_ADDR" in evoked_options:
                     evoked_options["KERNEL_TYPE_ADDR_0"] = evoked_options["KERNEL_TYPE_ADDR"]
                 elif not ("KERNEL_TYPE_ADDR_0") in evoked_options:
@@ -209,6 +222,9 @@ class DataSampler():
                     evoked_options["KERNEL_PAR_ADDR_0"] = evoked_options["KERNEL_PAR"]   
             else:             
                 for j in range(n_additive_responses):
+                    evoked_options["OWN_KERNEL_ADDR_" + str(j)] = \
+                        (("KERNEL_TYPE_ADDR_" + str(j)) in evoked_options) or \
+                        (("KERNEL_PAR_ADDR_" + str(j)) in evoked_options)
                     if not ("KERNEL_TYPE_ADDR_" + str(j)) in evoked_options:
                         evoked_options["KERNEL_TYPE_ADDR_" + str(j)] = evoked_options["KERNEL_TYPE"]
                     if not ("KERNEL_PAR_ADDR_" + str(j)) in evoked_options:
@@ -235,7 +251,9 @@ class DataSampler():
             if isinstance(evoked_options["ADDOA"],float) or isinstance(evoked_options["ADDOA"],int):
                 evoked_options["ADDOA"] = evoked_options["ADDOA"] * np.ones((Q,nchan)) 
             if evoked_options["ADDOA"].shape == (Q,):
-                evoked_options["ADDOA"] = np.transpose(mb.repmat(evoked_options["ADDOA"], nchan, 1))                 
+                evoked_options["ADDOA"] = np.transpose(mb.repmat(evoked_options["ADDOA"], nchan, 1))     
+            evoked_options["OWN_KERNEL_ADDO"] = \
+                ("KERNEL_TYPE_ADDO" in evoked_options) or ("KERNEL_PAR_ADDO" in evoked_options)     
             if not "KERNEL_TYPE_ADDO" in evoked_options:
                 evoked_options["KERNEL_TYPE_ADDO"] = evoked_options["KERNEL_TYPE"]
             if not "KERNEL_PAR_ADDO" in evoked_options:
@@ -247,6 +265,12 @@ class DataSampler():
         self.spont_options = spont_options
         self.evoked_options = evoked_options
         self.Q = Q
+
+
+    @staticmethod
+    def __find_phase_shift(cstim,wave):
+        j = np.argmax(cstim)
+        return math.pi/2 - wave[j]
 
 
     @staticmethod
@@ -280,6 +304,7 @@ class DataSampler():
             y1 = -np.log(np.power(np.abs(x1),kernel_par[0][0])+1)
             y1 = y1 - np.min(y1)
             y1 = y1 / np.max(y1)
+            y1 = np.flip(y1)
         else:
             raise Exception("Invalid kernel")
 
@@ -288,6 +313,7 @@ class DataSampler():
             x2 = np.linspace(-n2,0,kernel_par[1])
             y2 = st.norm.pdf(x2)
             y2 = y2 / np.max(y2)
+            y2 = np.flip(y2)
         elif kernel[1] == 'Log':
             L = max(round(kernel_par[1][1] +  kernel_par[1][2] * np.random.normal()) , 10 )
             x2 = np.linspace(0,1,L)
@@ -300,17 +326,16 @@ class DataSampler():
         T = len(stim)
         y = np.concatenate((y1,y2))
         L = len(y)
-        cstim = np.zeros((T,))
+        cstim = np.zeros(T)
         tstim = np.where(stim>0)[0]
         N = len(tstim) # N here is not trials but occurrences of the stim within a trial
 
         if d is None:
-            d = np.zeros((N,))
-            for j in range(N): 
-                d[j] = delay + jitter * np.random.normal()
-                if len(kernel_par)==3: d[j] += kernel_par[2]
-                d[j] = round(d[j])
-            d[d<0] = 0
+            d = delay + np.abs(jitter * np.random.normal(0,1,N))
+            #d = delay + jitter * np.random.normal(0,1,N)
+            if len(kernel_par)==3: d += kernel_par[2]
+            d = np.round(d)
+            #d[d<0] = 0
         
         for j in range(N): 
             t = tstim[j]
@@ -405,7 +430,8 @@ class DataSampler():
 
         x = np.zeros((T,nchan))
         ph = np.zeros((T,nchan)) # phase
-        ae = np.zeros((T,nchan)) # additive response 
+        ar = np.zeros((T,nchan)) # additive response 
+        ao = np.zeros((T,nchan)) # additive oscillation 
 
         phase_reset = self.evoked_options["phase_reset"]
         amplitude_modulation = self.evoked_options["amplitude_modulation"]
@@ -426,13 +452,7 @@ class DataSampler():
             for c in range(nchan):
                 x[:,c] = np.sin(ph[:,c]) * a[:,c] + \
                     self.spont_options["MEASUREMENT_NOISE"] * np.random.normal(0, 1, size=(T,))
-            return x,ph,ae,f,a
-
-        # ph_own_kernel = phase_reset and \
-        #     (evoked_options["KERNEL_TYPE_PH"] != evoked_options["KERNEL_TYPE"])
-        # pow_own_kernel = amplitude_modulation and len(evoked_options["KERNEL_TYPE_AMP"]) > 0
-        # addr_own_kernel = additive_response and len(evoked_options["KERNEL_PAR_ADDR"]) > 0
-        # addo_own_kernel = additive_oscillation and len(evoked_options["KERNEL_PAR_ADDO"]) > 0
+            return x,ph,ar,ao,f,a
         
         # Generating task evoked effects
         cstim = np.zeros((T,Q,nchan))
@@ -453,43 +473,48 @@ class DataSampler():
                     self.evoked_options["KERNEL_PAR"], \
                     d_abs + self.evoked_options["DELAY"][k,c], \
                     self.evoked_options["DELAY_JITTER"][k,c])
-                speak[k,c] = np.argmax(cstim[:,k,c])
-                if cstim[speak[k,c],k,c] == 0:
-                    speak[k,c] = 0
                 if phase_reset:
-                    cstim_ph[:,k,c],d = self.convolve_stimulus(stim == k+1, \
-                        self.evoked_options["KERNEL_TYPE_PH"], \
-                        self.evoked_options["KERNEL_PAR_PH"], \
-                        d_abs + self.evoked_options["DELAY"][k,c], \
-                        self.evoked_options["DELAY_JITTER"][k,c])
+                    if self.evoked_options["OWN_KERNEL_PH"]:
+                        cstim_ph[:,k,c],d = self.convolve_stimulus(stim == k+1, \
+                            self.evoked_options["KERNEL_TYPE_PH"], \
+                            self.evoked_options["KERNEL_PAR_PH"], \
+                            d_abs + self.evoked_options["DELAY"][k,c], \
+                            self.evoked_options["DELAY_JITTER"][k,c])
+                    else:
+                        cstim_ph[:,k,c] = cstim[:,k,c]
+                    speak[k,c] = np.argmax(cstim_ph[:,k,c])
+                    if cstim_ph[speak[k,c],k,c] == 0: speak[k,c] = 0
                 if amplitude_modulation:
-                    cstim_pow[:,k,c],d = self.convolve_stimulus(stim == k+1, \
-                        self.evoked_options["KERNEL_TYPE_AMP"], \
-                        self.evoked_options["KERNEL_PAR_AMP"], \
-                        d_abs + self.evoked_options["DELAY"][k,c], \
-                        self.evoked_options["DELAY_JITTER"][k,c])                
-                if additive_response:
-                    for j in range(n_additive_responses):
-                        cstim_addr[:,k,c,j],d = self.convolve_stimulus(stim == k+1, \
-                            self.evoked_options["KERNEL_TYPE_ADDR_" + str(j)], \
-                            self.evoked_options["KERNEL_PAR_ADDR_" + str(j)], \
+                    if self.evoked_options["OWN_KERNEL_AMP"]:
+                        cstim_pow[:,k,c],d = self.convolve_stimulus(stim == k+1, \
+                            self.evoked_options["KERNEL_TYPE_AMP"], \
+                            self.evoked_options["KERNEL_PAR_AMP"], \
                             d_abs + self.evoked_options["DELAY"][k,c], \
                             self.evoked_options["DELAY_JITTER"][k,c])   
+                    else:
+                        cstim_pow[:,k,c] = cstim[:,k,c]     
+                if additive_response:
+                    for j in range(n_additive_responses):
+                        if self.evoked_options["OWN_KERNEL_ADDR_" + str(j)]:
+                            cstim_addr[:,k,c,j],d = self.convolve_stimulus(stim == k+1, \
+                                self.evoked_options["KERNEL_TYPE_ADDR_" + str(j)], \
+                                self.evoked_options["KERNEL_PAR_ADDR_" + str(j)], \
+                                d_abs + self.evoked_options["DELAY"][k,c], \
+                                self.evoked_options["DELAY_JITTER"][k,c])  
+                        else:
+                            cstim_addr[:,k,c,j] = cstim[:,k,c]
+                    m = np.max(cstim_addr[:,k,c,:],axis=1)
+                    for j in range(n_additive_responses):
+                        cstim_addr[cstim_addr[:,k,c,j]<m,k,c,j] = 0
                 if additive_oscillation:
-                    cstim_addo[:,k,c],d = self.convolve_stimulus(stim == k+1, \
-                        self.evoked_options["KERNEL_TYPE_ADDO"], \
-                        self.evoked_options["KERNEL_PAR_ADDO"], \
-                        d_abs + self.evoked_options["DELAY"][k,c], \
-                        self.evoked_options["DELAY_JITTER"][k,c])                              
-
-        # if not ph_own_kernel and phase_reset:
-        #     cstim_ph = cstim
-        # if not pow_own_kernel and amplitude_modulation:
-        #     cstim_pow = cstim 
-        # if not addr_own_kernel and additive_response:
-        #     cstim_addr = np.expand_dims(cstim,axis=3)
-        # if not addo_own_kernel and additive_oscillation:
-        #     cstim_addo = cstim         
+                    if self.evoked_options["OWN_KERNEL_ADDO"]:
+                        cstim_addo[:,k,c],d = self.convolve_stimulus(stim == k+1, \
+                            self.evoked_options["KERNEL_TYPE_ADDO"], \
+                            self.evoked_options["KERNEL_PAR_ADDO"], \
+                            d_abs + self.evoked_options["DELAY"][k,c], \
+                            self.evoked_options["DELAY_JITTER"][k,c])                              
+                    else:
+                        cstim_addo[:,k,c] = cstim[:,k,c]   
 
         # Phase effect: phase reset until peak time, then entraining 
         if phase_reset:
@@ -507,7 +532,8 @@ class DataSampler():
                         alpha_comp = max(1-np.sum(cstim_ph[t,:,c]),0) # if <0, saturation
                         x[t,c] += alpha_comp * f[t,c]
                         for k in range(Q):
-                            alpha = cstim_ph[t,k,c] # weight for stimulus response
+                            # weight for stimulus response
+                            alpha = evoked_options["ENTRAINMENT_STRENGTH"] * cstim_ph[t,k,c] 
                             if alpha == 0: continue
                             if t <= speak[k,c]: # reset to phase
                                 delta = self.polar_gradient(x[t,c],target_phase[c,k]) 
@@ -551,15 +577,15 @@ class DataSampler():
             n_additive_responses = evoked_options["ADDR"].shape[2]
             STD_ADDR = evoked_options["STD_ADDR"]
             for j in range(n_additive_responses):
-                ADDR = evoked_options["ADDR"][:,:,j] + np.random.normal(0,STD_ADDR,size=(Q,nchan))
+                ADDR = evoked_options["ADDR"][:,:,j] + STD_ADDR * np.random.normal(0,1,size=(Q,nchan))
                 for t in range(T):
                     for c in range(nchan):
                         if not active_channels[c]: continue
                         for k in range(Q):
                             alpha = cstim_addr[t,k,c,j] # weight for stimulus response
                             if not alpha: continue
-                            ae[t,c] += alpha * ADDR[k,c] #(alpha**0.25)
-            
+                            ar[t,c] += alpha * ADDR[k,c] #(alpha**0.25)
+            x += ar
 
         # additive oscillation
         if additive_oscillation:
@@ -572,11 +598,12 @@ class DataSampler():
             for c in range(nchan):
                 if not active_channels[c]: continue
                 for k in range(Q):
-                    oscillation = np.sin(ADDOP[k,c] + np.cumsum(ADDOF[k,c] * np.ones(T)))
-                    ae[:,c] += ADDOA[k,c] * oscillation * cstim_addo[:,k,c]
-            
-        if additive_response or additive_oscillation:
-            x += ae
+                    ph_kc = np.cumsum(ADDOF[k,c] * np.ones(T))
+                    shift0 = self.__find_phase_shift(cstim_addo[:,k,c],ph_kc)
+                    oscillation = np.sin(ADDOP[k,c] + shift0 + ph_kc)
+                    #oscillation = np.sin(ADDOP[k,c] + ph_kc)
+                    ao[:,c] += ADDOA[k,c] * oscillation * cstim_addo[:,k,c]
+            x += ao
 
         # re-adjust frequency time series
         if phase_reset:
@@ -591,7 +618,7 @@ class DataSampler():
         # Normalise trial
         # x = st.zscore(x)
 
-        return x,ph,ae,f,a
+        return x,ph,ar,ao,f,a
 
 
     def sample(self,N=200,Stimulus=None,initial_conditions=None):
@@ -613,17 +640,18 @@ class DataSampler():
         Phase = np.zeros((T,N,nchan))
         X = np.zeros((T,N,nchan))
         Additive_response = np.zeros((T,N,nchan))
+        Additive_oscillation = np.zeros((T,N,nchan))
         #if self.evoked_options["additive_response"]: Z = np.zeros((T,N,nchan))
             
         for j in range(N):
             if task:
-                X[:,j,:],Phase[:,j,:],Additive_response[:,j,:],Freq[:,j,:],Amplitude[:,j,:] = \
+                X[:,j,:],Phase[:,j,:],Additive_response[:,j,:],Additive_oscillation[:,j,:],Freq[:,j,:],Amplitude[:,j,:] = \
                     self.sample_trial(Freq[:,j,:],Amplitude[:,j,:],Active_Channels[j,:],Stimulus[:,j])
             else:
-                X[:,j,:],Phase[:,j,:],Additive_response[:,j,:],Freq[:,j,:],Amplitude[:,j,:] = \
+                X[:,j,:],Phase[:,j,:],Additive_response[:,j,:],Additive_oscillation[:,j,:],Freq[:,j,:],Amplitude[:,j,:] = \
                     self.sample_trial(Freq[:,j,:],Amplitude[:,j,:])
 
-        return X,Phase,Freq,Amplitude,Additive_response,Stimulus
+        return X,Phase,Freq,Amplitude,Additive_response,Additive_oscillation,Stimulus
 
 
     @staticmethod
