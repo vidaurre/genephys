@@ -5,6 +5,8 @@ genephys/.DS_Store
 examples/.DS_Store
 examples/jupyter_notebooks/.DS_Store
 
+genephys.egg-info/*
+
 .DS_Store
 *.swp
 *.py~

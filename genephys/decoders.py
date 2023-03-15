@@ -9,7 +9,6 @@ import numpy as np
 from numpy import matlib as mb
 from scipy import stats as st
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
-#from sklearn.linear_model import LogisticRegression 
 from sklearn.linear_model import Ridge
 
 class Decoder():

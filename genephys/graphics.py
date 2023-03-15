@@ -1,9 +1,9 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy import stats as st
-#from . import sampler
-import sampler, decoders
+import seaborn as sb
 
+from . import sampler
 
 def plot_accuracy(accuracy,colorbar_accuracy_lim=(0.25,0.75),filename=None):
     """ Plots the TGM and the diagonal, 
@@ -20,9 +20,24 @@ def plot_accuracy(accuracy,colorbar_accuracy_lim=(0.25,0.75),filename=None):
         fig = plt.figure()
         gs = fig.add_gridspec(1,2)
         ax = fig.add_subplot(gs[0, 0])
-        im = ax.imshow(accuracy[np.arange(T-1,-1,-1),:])
-        plt.colorbar(im, ax=ax)
-        im.set_clim(colorbar_accuracy_lim)
+        g = sb.heatmap(ax=ax,data=accuracy[np.arange(T-1,-1,-1),:],\
+            vmin=colorbar_accuracy_lim[0],vmax=colorbar_accuracy_lim[1],\
+            cmap='bwr',xticklabels=False, yticklabels=False,square=True,cbar=True)
+        ax.axhline(y=0, color='k',linewidth=4)
+        ax.axhline(y=accuracy.shape[1], color='k',linewidth=4)
+        ax.axvline(x=0, color='k',linewidth=4)
+        ax.axvline(x=accuracy.shape[0], color='k',linewidth=4)
+
+        x0, x1 = (0,accuracy.shape[1])
+        y0, y1 = (0,accuracy.shape[1])
+        #y0, y1 = g.ax_joint.get_ylim()
+        # lims = [max(x0, y0), min(x1, y1)]
+        g.plot([x0, x1],[y1, y0], '-k')
+
+        ax.plot
+        # im = ax.imshow(accuracy[np.arange(T-1,-1,-1),:])
+        #plt.colorbar(im, ax=ax)
+        #im.set_clim(colorbar_accuracy_lim)
         ax.set_xlabel('Training time')
         ax.set_ylabel('Testing time')
         ax = fig.add_subplot(gs[0, 1])
@@ -95,8 +110,6 @@ def plot_corrcoefs(X,y,filename=None):
 
     plot_betas(C,filename)
     
-
-
 
 def plot_signal(X,Phase=None,Freq=None,Amplitude=None,Additive_responses=None,\
         Stimulus=None,n=0,j=0,filename=None):
