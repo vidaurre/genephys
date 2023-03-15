@@ -34,7 +34,6 @@ def plot_accuracy(accuracy,colorbar_accuracy_lim=(0.25,0.75),filename=None):
         # lims = [max(x0, y0), min(x1, y1)]
         g.plot([x0, x1],[y1, y0], '-k')
 
-        ax.plot
         # im = ax.imshow(accuracy[np.arange(T-1,-1,-1),:])
         #plt.colorbar(im, ax=ax)
         #im.set_clim(colorbar_accuracy_lim)
