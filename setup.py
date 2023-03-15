@@ -2,7 +2,7 @@ import setuptools
 
 setuptools.setup(
     name='genephys',
-    version='0.1.7',
+    version='0.1.8',
     description='Generative model of empirical electrophysiological signals',
     url='https://github.com/vidaurre/genephys',
     author='Diego Vidaurre',
