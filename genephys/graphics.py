@@ -58,6 +58,7 @@ def plot_accuracy(accuracy,colorbar_accuracy_lim=(0.25,0.75),filename=None):
 def plot_betas(betas,filename=None):
     """ Plots betas
     """
+
     fig,ax = plt.subplots()
     p,T = betas.shape
     labels_x = np.linspace(0,1,5)
@@ -68,11 +69,9 @@ def plot_betas(betas,filename=None):
     #plt.colorbar(im, ax=ax)
     #plt.sca(ax)
     plt.xticks(pos_x, labels_x)
-    if p > 10: plt.yticks(labels_y, labels_y)
-    else: plt.yticks(labels_y, labels_y)
+    plt.yticks(labels_y, labels_y)
     ax.set_xlabel('Time')
     ax.set_ylabel('Channels')
-
     fig.tight_layout()
 
     if not filename is None:
@@ -304,7 +303,6 @@ def plot_activation_function(kernel_type=('Exponential','Log'),kernel_par=(25,(1
 
     if not filename is None:
         plt.savefig(filename)
-
 
 
 def plot_activation_functions(functions,T=400,t=100,delay=0,\
