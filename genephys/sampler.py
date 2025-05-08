@@ -95,6 +95,8 @@ class DataSampler():
                 evoked_options["KERNEL_TYPE"] = ('Exponential','Log')
             if not "KERNEL_PAR" in evoked_options:
                 evoked_options["KERNEL_PAR"] = (round(T*0.2),(10,round(T*0.4),0))  
+            if not "PRESTIM_STATE_BIAS" in evoked_options:
+                evoked_options["PRESTIM_STATE_BIAS"] = False
             
         if evoked_options["phase_reset"]:
             if not "DIFF_PH" in evoked_options:
@@ -433,10 +435,10 @@ class DataSampler():
         ar = np.zeros((T,nchan)) # additive response 
         ao = np.zeros((T,nchan)) # additive oscillation 
 
-        phase_reset = self.evoked_options["phase_reset"]
-        amplitude_modulation = self.evoked_options["amplitude_modulation"]
-        additive_response = self.evoked_options["additive_response"]
-        additive_oscillation = self.evoked_options["additive_oscillation"]
+        phase_reset = evoked_options["phase_reset"]
+        amplitude_modulation = evoked_options["amplitude_modulation"]
+        additive_response = evoked_options["additive_response"]
+        additive_oscillation = evoked_options["additive_oscillation"]
         if additive_response: n_additive_responses = evoked_options["ADDR"].shape[2]
         else: n_additive_responses = 1
 
@@ -452,8 +454,8 @@ class DataSampler():
             for c in range(nchan):
                 x[:,c] = np.sin(ph[:,c]) * a[:,c] + \
                     self.spont_options["MEASUREMENT_NOISE"] * np.random.normal(0, 1, size=(T,))
-            return x,ph,ar,ao,f,a
-        
+            return x,ph,ar,ao,f,a   
+
         # Generating task evoked effects
         cstim = np.zeros((T,Q,nchan))
         cstim_ph = np.zeros((T,Q,nchan))
@@ -515,6 +517,15 @@ class DataSampler():
                             self.evoked_options["DELAY_JITTER"][k,c])                              
                     else:
                         cstim_addo[:,k,c] = cstim[:,k,c]   
+
+        # apply a multiplier on the response fuctions depending on the initial phase
+        if evoked_options["PRESTIM_STATE_BIAS"]:
+            state_mod = (x[0,:] + math.pi) / (2*math.pi) # between 0 and 1, highest at +pi, lowest at -pi
+            for c in range(nchan): 
+                cstim_ph[:,:,c] *= state_mod[c]
+                cstim_pow[:,:,c] *= state_mod[c]
+                cstim_addr[:,:,c] *= state_mod[c]
+                cstim_addo[:,:,c] *= state_mod[c]
 
         # Phase effect: phase reset until peak time, then entraining 
         if phase_reset:
